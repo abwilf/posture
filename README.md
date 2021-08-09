@@ -69,7 +69,7 @@ optional arguments:
                         before notification.
   --min_visibility_threshold MIN_VISIBILITY_THRESHOLD
                         Threshold of how confident model must be in the
-                        visibillity of the least visible joint in an angle
+                        visibility of the least visible joint in an angle
                         triad
   --capture_frequency CAPTURE_FREQUENCY
                         Number of seconds between capturing frames for

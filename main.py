@@ -174,7 +174,7 @@ if __name__ == '__main__':
     and it consists of the angle between "LEFT_SHOULDER", "LEFT_ELBOW", and "LEFT_WRIST" (not arbitrary; these names must align with those in the mediapipe api detailed in fig 4 at https://google.github.io/mediapipe/solutions/pose.html).
     The optimal angle is 90 degrees, and I'm allowing for being 10 degrees off in either direction before notification.
     ''')
-    parser.add_argument('--min_visibility_threshold', type=float, default=.7, help='Threshold of how confident model must be in the visibillity of the least visible joint in an angle triad')
+    parser.add_argument('--min_visibility_threshold', type=float, default=.7, help='Threshold of how confident model must be in the visibility of the least visible joint in an angle triad')
     parser.add_argument('--capture_frequency', type=float, default=.01, help='Number of seconds between capturing frames for processing.  The smaller this number, the smoother the video, but the more processing power required.')
 
     args = parser.parse_args()
