@@ -1,0 +1,4 @@
+{
+    "left_elbow": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST", 90, 10],
+    "right_elbow": ["RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST", 90, 10]
+}

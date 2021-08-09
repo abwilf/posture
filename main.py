@@ -92,7 +92,7 @@ async def input_loop():
 
 async def main_loop():
   global init
-  cap = cv2.VideoCapture(1)
+  cap = cv2.VideoCapture(args.cam_number)
   with mp_pose.Pose( min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     while cap.isOpened():
       await asyncio.sleep(args.capture_frequency)
@@ -162,6 +162,7 @@ async def main():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--time_threshold', type=int, default=5, help='Number of seconds in bad posture before notification')
+    parser.add_argument('--cam_number', type=int, default=1, help='The index of the camera attached to this system. 0 is automatically selected, but does not always work with webcams.  Try 1,2...etc.')
     parser.add_argument('--time_print_threshold', type=int, default=2, help='Number of seconds in bad posture before print messages to console')
     parser.add_argument('--angles_path', type=str, default='./angles.json', help='''
     Path to where the angles json is stored, containing all angles you would like the program to monitor.
