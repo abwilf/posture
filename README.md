@@ -1,6 +1,6 @@
 # posture
 
-![alt text](file:///Users/RachelWilf/Desktop/calibration.png)
+![alt text](https://github.com/abwilf/posture/blob/main/calibration.png)
 
 ## Approach
 We all know roughly what good posture looks like, but can be difficult to keep that in mind when we're working. **posture** uses an external webcam and an [open source computer vision library](https://google.github.io/mediapipe/) to track the angles between joints in the human body and notify the user when those angles stray too far from what they should be.
