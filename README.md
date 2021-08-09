@@ -3,7 +3,7 @@
 ![alt text](https://github.com/abwilf/posture/blob/main/calibration.png)
 
 ## Approach
-We all know roughly what good posture looks like, but it can be difficult to keep that in mind when we're working. **posture** uses an external webcam and an [open source computer vision library](https://google.github.io/mediapipe/) to track the angles between joints in the human body and notify the user when those angles stray too far from what they should be.
+We all know roughly what good posture feels like, but it can be difficult to keep that in mind when we're working. **posture** uses an external webcam and an [open source computer vision library](https://google.github.io/mediapipe/) to track the angles between joints in the human body and notify the user when those angles stray too far from what they should be for too long.  The joints the user wishes to monitor, the optimal angle for that joint, the tolerance of how far off the angle can be before notifying, and the tolerance of how long the user can be in a "bad" position are all configurable through a simple json file.
 
 ## Requirements
 - `python 3.7+`
@@ -21,9 +21,9 @@ pip install -r requirements.txt
 ```
 python3 main.py
 ```
-2. Calibrate: move the camera and your body around until the program can clearly identify the relevant joints. You may need to roll up your sleeves.
+2. Calibrate: position the camera and move your body around until the program can clearly identify the relevant joints. You may need to roll up your sleeves.
 
-3. "Unpause" the program by typing space + enter into the terminal once you've finished calibrating, and it will begin monitoring the relevant angles.
+3. "Unpause" the program by typing space + enter into the terminal once you've finished calibrating, and **posture** will begin monitoring the relevant angles.
 
 4. End the program with ctrl+c as usual.
 
@@ -76,3 +76,7 @@ optional arguments:
                         processing. The smaller this number, the smoother the
                         video, but the more processing power required.
 ```
+
+## Future Work
+- Compatibility with windows notifications
+- Support for multiple simultaneous camera streams: multiple cameras may be able to better capture groups of angles that a single camera would have difficulty with, for example the elbow and the neck
