@@ -1,7 +1,8 @@
 import asyncio
 from tqdm import tqdm
 from aioconsole import ainput
-import cv2, time, pync
+import cv2, time
+import pync
 import mediapipe as mp
 import numpy as np
 from datetime import datetime
@@ -29,6 +30,7 @@ class Logger():
     else:
       self.last_notification = msg
       pync.notify(msg, sound='ping')
+      # os.system(f"say {msg}")
 
 class TestMonitor():
   def __init__(self, test_name, time_threshold, min_visibility_threshold):
@@ -162,13 +164,15 @@ async def main():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--time_threshold', type=int, default=5, help='Number of seconds in bad posture before notification')
-    parser.add_argument('--cam_number', type=int, default=1, help='The index of the camera attached to this system. 0 is automatically selected, but does not always work with webcams.  Try 1,2...etc.')
-    parser.add_argument('--time_print_threshold', type=int, default=2, help='Number of seconds in bad posture before print messages to console')
+    parser.add_argument('--cam_number', type=int, default=1, help='The index of the camera attached to this system. 0 indicates automatically selected, but does not always work with external webcams.  Try 1,2...etc.')
+    parser.add_argument('--time_print_threshold', type=int, default=2, help='Number of seconds in bad posture before program starts to print messages to console')
     parser.add_argument('--angles_path', type=str, default='./angles.json', help='''
     Path to where the angles json is stored, containing all angles you would like the program to monitor.
     The format is a dictionary with name of the angle as the key mapping to an array of 
     [first joint, middle joint, last joint, optimal angle, angle tolerance before notification]
-    e.g.: "left_elbow": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST", 90, 10],
+    e.g.: "left_elbow": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST", 90, 10] means that I named this angle "left_elbow" (arbitrary),
+    and it consists of the angle between "LEFT_SHOULDER", "LEFT_ELBOW", and "LEFT_WRIST" (not arbitrary; these names must align with those in the mediapipe api detailed in fig 4 at https://google.github.io/mediapipe/solutions/pose.html).
+    The optimal angle is 90 degrees, and I'm allowing for being 10 degrees off in either direction before notification.
     ''')
     parser.add_argument('--min_visibility_threshold', type=float, default=.7, help='Threshold of how confident model must be in the visibillity of the least visible joint in an angle triad')
     parser.add_argument('--capture_frequency', type=float, default=.01, help='Number of seconds between capturing frames for processing.  The smaller this number, the smoother the video, but the more processing power required.')
