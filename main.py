@@ -1,4 +1,5 @@
 import asyncio
+from tqdm import tqdm
 from aioconsole import ainput
 import cv2, time, pync
 import mediapipe as mp
@@ -13,6 +14,7 @@ mp_holistic = mp.solutions.holistic
 # TODO: time tolerance (in seconds)
 # confidence threshold
 time_threshold = 5
+time_print_threshold = 2 # time in state before starts printing msgs to console
 min_visibility_threshold = .7
 capture_frequency = .01
 show_image = True
@@ -27,6 +29,22 @@ angles = {
   'right_elbow': ['RIGHT_SHOULDER', 'RIGHT_ELBOW', 'RIGHT_WRIST', 90, 10],
 }
 
+class Logger():
+  def __init__(self):
+    self.last_msg = ''
+    self.last_notification = ''
+  def print(self, msg):
+    if msg == self.last_msg:
+      return
+    else:
+      self.last_msg = msg
+      print(msg)
+  def notify(self, msg):
+    if msg == self.last_notification:
+      return
+    else:
+      self.last_notification = msg
+      pync.notify(msg, sound='ping')
 
 class TestMonitor():
   def __init__(self, test_name, time_threshold, min_visibility_threshold):
@@ -38,6 +56,7 @@ class TestMonitor():
     self.time_threshold = time_threshold
     self.min_visibility_threshold = min_visibility_threshold
     self.test_name = test_name
+    self.logger = Logger()
 
   def watch(self, angle, opt_angle, angle_tolerance, min_visibility):
       lower_bound, upper_bound, within_range = interpret_angle(angle, opt_angle, angle_tolerance)
@@ -52,15 +71,23 @@ class TestMonitor():
         else:
           self.time_in_fail = (datetime.utcnow() - self.started_failing).total_seconds()
         
-        print(f'Failing {self.test_name} for {npr(self.time_in_fail)} seconds. Angle: {npr(angle)}')
+        if self.time_in_fail > time_print_threshold:
+          self.logger.print(f'{self.test_name} is out of alignment!')
+          if self.time_in_fail > self.time_threshold:
+            self.logger.notify(f'{self.test_name} is out of alignment!')
       
       else:
+        was_not_all_good = max([monitor.time_in_fail for monitor in monitors.values()]) != 0
         self.started_failing = None
         self.time_in_fail = 0
-      
-      if self.time_in_fail > self.time_threshold:
-        print(f'{self.test_name} is out of alignment! Angle {angle} is not within optimal angle {opt_angle} and tolerance {angle_tolerance}.  Have been failing for {self.time_in_fail} seconds.')
-        pync.notify(f'{self.test_name} is out of alignment!')
+        
+        all_good_now = max([monitor.time_in_fail for monitor in monitors.values()]) == 0
+
+        if all_good_now and was_not_all_good:
+          self.logger.print('Good posture!')
+
+        self.logger.last_msg = ''
+        self.logger.last_notification = ''
   
   def reset(self):
     self.started_failing = None
@@ -79,7 +106,7 @@ async def input_loop():
     line = await ainput('')
     if line == ' ':
       paused = flip_bool(paused)
-      print('Monitors ' + 'paused' if paused else 'unpaused')
+      print('Monitors ' + ('paused' if paused else 'unpaused'))
 
 async def main_loop():
   cap = cv2.VideoCapture(1)
