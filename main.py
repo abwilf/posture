@@ -3,31 +3,14 @@ from tqdm import tqdm
 from aioconsole import ainput
 import cv2, time, pync
 import mediapipe as mp
+import numpy as np
 from datetime import datetime
 from utils import *
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 mp_holistic = mp.solutions.holistic
-
-
-# TODO: time tolerance (in seconds)
-# confidence threshold
-time_threshold = 5
-time_print_threshold = 2 # time in state before starts printing msgs to console
-min_visibility_threshold = .7
-capture_frequency = .01
-show_image = True
-
 paused = True
-
-# angles format:
-# (pt1, pt2, pt3, optimal angle, angle tolerance)
-
-angles = {
-  'left_elbow': ['LEFT_SHOULDER', 'LEFT_ELBOW', 'LEFT_WRIST', 90, 10],
-  'right_elbow': ['RIGHT_SHOULDER', 'RIGHT_ELBOW', 'RIGHT_WRIST', 90, 10],
-}
 
 class Logger():
   def __init__(self):
@@ -71,7 +54,7 @@ class TestMonitor():
         else:
           self.time_in_fail = (datetime.utcnow() - self.started_failing).total_seconds()
         
-        if self.time_in_fail > time_print_threshold:
+        if self.time_in_fail > args.time_print_threshold:
           self.logger.print(f'{self.test_name} is out of alignment!')
           if self.time_in_fail > self.time_threshold:
             self.logger.notify(f'{self.test_name} is out of alignment!')
@@ -92,8 +75,6 @@ class TestMonitor():
   def reset(self):
     self.started_failing = None
 
-monitors = {k: TestMonitor(k,time_threshold,min_visibility_threshold) for k in angles.keys()}
-
 def interpret_angle(angle, opt_angle, angle_tolerance):
   lower_bound = opt_angle-angle_tolerance
   upper_bound = opt_angle+angle_tolerance
@@ -113,7 +94,7 @@ async def main_loop():
   with mp_pose.Pose( min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
 
     while cap.isOpened():
-      await asyncio.sleep(capture_frequency)
+      await asyncio.sleep(args.capture_frequency)
       success, image = cap.read()
       if not success:
         print("Ignoring empty camera frame.")
@@ -173,4 +154,21 @@ async def main():
   await input_task
   await main_task
 
-asyncio.run(main())
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--time_threshold', type=int, default=5, help='Number of seconds in bad posture before notification')
+    parser.add_argument('--time_print_threshold', type=int, default=2, help='Number of seconds in bad posture before print messages to console')
+    parser.add_argument('--angles_path', type=str, default='./angles.json', help='''
+    Path to where the angles json is stored, containing all angles you would like the program to monitor.
+    The format is a dictionary with name of the angle as the key mapping to an array of 
+    [first joint, middle joint, last joint, optimal angle, angle tolerance before notification]
+    e.g.: "left_elbow": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST", 90, 10],
+    ''')
+    parser.add_argument('--min_visibility_threshold', type=float, default=.7, help='Threshold of how confident model must be in the visibillity of the least visible joint in an angle triad')
+    parser.add_argument('--capture_frequency', type=float, default=.01, help='Number of seconds between capturing frames for processing.  The smaller this number, the smoother the video, but the more processing power required.')
+
+    args = parser.parse_args()
+    angles = load_json(args.angles_path)
+    monitors = {k: TestMonitor(k,args.time_threshold,args.min_visibility_threshold) for k in angles.keys()}
+
+    asyncio.run(main())
