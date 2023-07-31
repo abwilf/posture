@@ -1,4 +1,3 @@
-import asyncio
 from tqdm import tqdm
 from aioconsole import ainput
 import cv2, time
@@ -7,178 +6,181 @@ import mediapipe as mp
 import numpy as np
 from datetime import datetime
 from utils import *
+import math as m
+import pygame.camera
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 mp_holistic = mp.solutions.holistic
-paused = True # whether your posture is monitored for notifications or not (calibration)
-init = True # first run: print opening message
+blue = (255, 127, 0)
+red = (50, 50, 255)
+green = (127, 255, 0)
+dark_blue = (127, 20, 0)
+light_green = (127, 233, 100)
+yellow = (0, 255, 255)
+pink = (255, 0, 255)
+font = cv2.FONT_HERSHEY_SIMPLEX
 
-class Logger():
-  def __init__(self):
-    self.last_msg = ''
-    self.last_notification = ''
-  def print(self, msg):
-    if msg == self.last_msg:
-      return
-    else:
-      self.last_msg = msg
-      print(msg)
-  def notify(self, msg):
-    if msg == self.last_notification:
-      return
-    else:
-      self.last_notification = msg
-      pync.notify(msg, sound='ping')
-      # os.system(f"say {msg}")
+# Calculate distance
+def findDistance(x1, y1, x2, y2):
+    dist = m.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+    return dist
 
-class TestMonitor():
-  def __init__(self, test_name, time_threshold, min_visibility_threshold):
-    self.test_failed = ''
-    self.optimal_angle = None
-    self.current_angle = None
-    self.time_in_fail = 0
-    self.started_failing = None
-    self.time_threshold = time_threshold
-    self.min_visibility_threshold = min_visibility_threshold
-    self.test_name = test_name
-    self.logger = Logger()
+def sendWarning(x):
+    pync.notify(x, sound='ping')
 
-  def watch(self, angle, opt_angle, angle_tolerance, min_visibility):
-      lower_bound, upper_bound, within_range = interpret_angle(angle, opt_angle, angle_tolerance)
-      
-      # failing
-      if not within_range and min_visibility > self.min_visibility_threshold and not paused:
-        
-        if self.started_failing is None:
-          self.started_failing = datetime.utcnow() 
-          self.time_in_fail = 0
-        
-        else:
-          self.time_in_fail = (datetime.utcnow() - self.started_failing).total_seconds()
-        
-        if self.time_in_fail > args.time_print_threshold:
-          self.logger.print(f'{self.test_name} is out of alignment')
-          if self.time_in_fail > self.time_threshold:
-            self.logger.notify(f'{self.test_name} is out of alignment')
-      
-      else:
-        was_not_all_good = max([monitor.time_in_fail for monitor in monitors.values()]) != 0
-        self.started_failing = None
-        self.time_in_fail = 0
-        
-        all_good_now = max([monitor.time_in_fail for monitor in monitors.values()]) == 0
+# Calculate angle.
+def findAngle(x1, y1, x2, y2):
+    theta = m.acos((y2 - y1) * (-y1) / (m.sqrt(
+        (x2 - x1) ** 2 + (y2 - y1) ** 2) * y1))
+    degree = int(180 / m.pi) * theta
+    return degree
 
-        if all_good_now and was_not_all_good:
-          self.logger.print('Good posture')
+pose = mp_pose.Pose()
 
-        self.logger.last_msg = ''
-        self.logger.last_notification = ''
-  
-  def reset(self):
-    self.started_failing = None
-
-def interpret_angle(angle, opt_angle, angle_tolerance):
-  lower_bound = opt_angle-angle_tolerance
-  upper_bound = opt_angle+angle_tolerance
-  within_range = lower_bound <= angle <= upper_bound
-  return lower_bound, upper_bound, within_range
-
-async def input_loop():
-  global paused
-  while True:
-    line = await ainput('')
-    if line == ' ':
-      paused = flip_bool(paused)
-      print('Monitors ' + ('paused' if paused else 'unpaused'))
-
-async def main_loop():
+def main():
+  good_frames = 0
+  bad_frames = 0
   global init
-  cap = cv2.VideoCapture(args.cam_number)
-  with mp_pose.Pose( min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-    while cap.isOpened():
-      await asyncio.sleep(args.capture_frequency)
-      success, image = cap.read()
-      if not success:
-        print("Ignoring empty camera frame.")
-        continue
+  
+  # open HD Web cam – not facetime cam
+  pygame.camera.init()
+  cams = pygame.camera.list_cameras()
+  cam_index = [i for i, s in enumerate(cams) if 'HD Web' in s][0] # TODO: modify based on what the cam idx names are; you don't want the facetime one
+  cap = cv2.VideoCapture(cam_index)
 
-      image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-      image.flags.writeable = False
-      image_height, image_width, image_z = image.shape
+  if args.debug:
+    # Loop until the camera is closed or 'q' is pressed
+    while(cap.isOpened()):
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        if ret:
+            # Display the resulting frame
+            cv2.imshow('Frame', frame)
 
-      results = pose.process(image)
+            # Press Q on keyboard to exit
+            if cv2.waitKey(25) & 0xFF == ord('q'):
+                break
+        else:
+            break
 
-      if init:
-        print('\nNOTE: monitors are paused (not monitoring your posture) for calibration. Press space, then enter to unpause / pause again.')
-        init = False
+    # When everything done, release the video capture object and close all windows
+    cap.release()
+    cv2.destroyAllWindows()
+    return
 
-      if results.pose_landmarks is None:
-        if not paused:
-          print('No landmarks detected, resetting all monitors')
-        [monitor.reset() for monitor in monitors.values()]
+  pose = mp_pose.Pose()
+  while cap.isOpened():
+    success, image = cap.read()
+    if not success:
+      print("Ignoring empty camera frame.")
+      continue
 
-      else:
-          landmark = results.pose_landmarks.landmark
+    # get high level image reading & pose stuff (need to convert to and from RGB for pose stuff)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    h, w = image.shape[:2]
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    keypoints = pose.process(image)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-          for test_name,v in angles.items():
-            monitor = monitors[test_name]
+    try:
+        # Get landmarks
+        lm = keypoints.pose_landmarks
+        lmPose = mp_pose.PoseLandmark
+        l_shldr_x = int(lm.landmark[lmPose.LEFT_SHOULDER].x * w)
+        l_shldr_y = int(lm.landmark[lmPose.LEFT_SHOULDER].y * h)
+        r_shldr_x = int(lm.landmark[lmPose.RIGHT_SHOULDER].x * w)
+        r_shldr_y = int(lm.landmark[lmPose.RIGHT_SHOULDER].y * h)
+        l_ear_x = int(lm.landmark[lmPose.LEFT_EAR].x * w)
+        l_ear_y = int(lm.landmark[lmPose.LEFT_EAR].y * h)
+        l_hip_x = int(lm.landmark[lmPose.LEFT_HIP].x * w)
+        l_hip_y = int(lm.landmark[lmPose.LEFT_HIP].y * h)
 
-            name1, name2, name3, opt_angle, angle_tolerance = v
+        ## Calculate alignment
+        offset = findDistance(l_shldr_x, l_shldr_y, r_shldr_x, r_shldr_y)
+        if offset < args.alignment_offset:
+            cv2.putText(image, str(int(offset)) + ' Aligned', (w - 150, 30), font, 0.9, green, 2)
+        else:
+            cv2.putText(image, str(int(offset)) + ' Not Aligned', (w - 150, 30), font, 0.9, red, 2)
+
+        ## Calculate posture
+        # Calculate angles
+        neck_inclination = findAngle(l_shldr_x, l_shldr_y, l_ear_x, l_ear_y)
+        torso_inclination = findAngle(l_hip_x, l_hip_y, l_shldr_x, l_shldr_y)
+
+        angle_text_string = 'Neck : ' + str(int(neck_inclination)) + '  Torso : ' + str(int(torso_inclination))
+        in_good_posture = neck_inclination < args.neck_inclination and torso_inclination < args.torso_inclination
+
+        if in_good_posture: 
+            bad_frames = 0
+            good_frames += 1
             
-            coords1 = landmark[getattr(mp_holistic.PoseLandmark, name1)]
-            x1, v1 = np.array([coords1.x, coords1.y, coords1.z]), coords1.visibility
+            indicator_color = light_green
+            landmark_color = green
 
-            coords2 = landmark[getattr(mp_holistic.PoseLandmark, name2)]
-            x2, v2 = np.array([coords2.x, coords2.y, coords2.z]), coords2.visibility
+        else: # BAD
+            good_frames = 0
+            bad_frames += 1
+            indicator_color = red
+            landmark_color = red
+        
+        # Write all information to screen
+        # add indicator text
+        cv2.putText(image, angle_text_string, (10, 30), font, 0.9, indicator_color, 2)
+        cv2.putText(image, str(int(neck_inclination)), (l_shldr_x + 10, l_shldr_y), font, 0.9, indicator_color, 2)
+        cv2.putText(image, str(int(torso_inclination)), (l_hip_x + 10, l_hip_y), font, 0.9, indicator_color, 2)
 
-            coords3 = landmark[getattr(mp_holistic.PoseLandmark, name3)]
-            x3, v3 = np.array([coords3.x, coords3.y, coords3.z]), coords3.visibility
+        # Draw landmarks.
+        cv2.circle(image, (l_shldr_x, l_shldr_y), 7, yellow, -1)
+        cv2.circle(image, (l_ear_x, l_ear_y), 7, yellow, -1)
 
-            x1x2 = x1-x2
-            x2x3 = x3-x2
-            angle = np.degrees(np.arccos(np.dot(x1x2,x2x3) / (np.linalg.norm(x1x2)*np.linalg.norm(x2x3))))
-            min_visibility = np.mean([v1,v2,v3])
+        # Let's take y - coordinate of P3 100px above x1,  for display elegance.
+        cv2.circle(image, (l_shldr_x, l_shldr_y - 100), 7, yellow, -1)
+        cv2.circle(image, (r_shldr_x, r_shldr_y), 7, pink, -1)
+        cv2.circle(image, (l_hip_x, l_hip_y), 7, yellow, -1)
+        cv2.circle(image, (l_hip_x, l_hip_y - 100), 7, yellow, -1)
 
-            monitor.watch(angle, opt_angle, angle_tolerance, min_visibility)
+        # Join landmarks.
+        cv2.line(image, (l_shldr_x, l_shldr_y), (l_ear_x, l_ear_y), landmark_color, 4)
+        cv2.line(image, (l_shldr_x, l_shldr_y), (l_shldr_x, l_shldr_y - 100), landmark_color, 4)
+        cv2.line(image, (l_hip_x, l_hip_y), (l_shldr_x, l_shldr_y), landmark_color, 4)
+        cv2.line(image, (l_hip_x, l_hip_y), (l_hip_x, l_hip_y - 100), landmark_color, 4)
 
-      # Draw the pose annotation on the image.
-      image.flags.writeable = True
-      image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-      mp_drawing.draw_landmarks(
-          image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-      
-      image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-      cv2.imshow('MediaPipe Pose', image)
-      if cv2.waitKey(5) & 0xFF == 27:
+        # Calculate the time of remaining in a particular posture.
+        good_time = (1 / fps) * good_frames
+        bad_time =  (1 / fps) * bad_frames
+
+        # Pose time.
+        if good_time > 0:
+            time_string_good = 'Good Posture Time : ' + str(round(good_time, 1)) + 's'
+            cv2.putText(image, time_string_good, (10, h - 20), font, 0.9, green, 2)
+        else:
+            time_string_bad = 'Bad Posture Time : ' + str(round(bad_time, 1)) + 's'
+            cv2.putText(image, time_string_bad, (10, h - 20), font, 0.9, red, 2)
+
+        # If you stay in bad posture for more than 3 minutes (180s) send an alert.
+        if bad_time > args.threshold:
+            sendWarning("out of alignment")
+    except:
+        cv2.putText(image, 'ERROR: Cannot identify keypoints!', (w - 150, 30), font, 0.9, green, 2)
+    # Display.
+    cv2.imshow('MediaPipe Pose', image)
+    if cv2.waitKey(5) & 0xFF == ord('q'):
         break
   cap.release()
 
-async def main():
-  main_task = asyncio.create_task(main_loop())
-  input_task = asyncio.create_task(input_loop())
-
-  await input_task
-  await main_task
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--time_threshold', type=int, default=5, help='Number of seconds in bad posture before notification')
-    parser.add_argument('--cam_number', type=int, default=1, help='The index of the camera attached to this system. 0 indicates automatically selected, but does not always work with external webcams.  Try 1,2...etc.')
-    parser.add_argument('--time_print_threshold', type=int, default=2, help='Number of seconds in bad posture before program starts to print messages to console')
-    parser.add_argument('--angles_path', type=str, default='./angles.json', help='''
-    Path to where the angles json is stored, containing all angles you would like the program to monitor.
-    The format is a dictionary with name of the angle as the key mapping to an array of 
-    [first joint, middle joint, last joint, optimal angle, angle tolerance before notification]
-    e.g.: "left_elbow": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST", 90, 10] means that I named this angle "left_elbow" (arbitrary),
-    and it consists of the angle between "LEFT_SHOULDER", "LEFT_ELBOW", and "LEFT_WRIST" (not arbitrary; these names must align with those in the mediapipe api detailed in fig 4 at https://google.github.io/mediapipe/solutions/pose.html).
-    The optimal angle is 90 degrees, and I'm allowing for being 10 degrees off in either direction before notification.
-    ''')
-    parser.add_argument('--min_visibility_threshold', type=float, default=.7, help='Threshold of how confident model must be in the visibility of the least visible joint in an angle triad')
-    parser.add_argument('--capture_frequency', type=float, default=.01, help='Number of seconds between capturing frames for processing.  The smaller this number, the smoother the video, but the more processing power required.')
+    parser.add_argument('--threshold', type=int, default=10, help='Number of seconds in bad posture before notification')
+    parser.add_argument('--debug', type=int, default=0, help='If 1, will display the camera feed and exit.  Useful for debugging camera issues.')
+
+    # thresholds for alignment
+    parser.add_argument('--alignment_offset', type=int, default=30, help='Maximum distance between left and right shoulders to qualify for "alignment" – "can the camera see you ok"') #TODO: 100?
+
+    # thresholds for good and bad posture
+    parser.add_argument('--neck_inclination', type=int, default=40, help='Maximum angle of neck inclination (degrees) before notification')
+    parser.add_argument('--torso_inclination', type=int, default=10, help='Maximum angle of torso inclination (degrees) before notification')
 
     args = parser.parse_args()
-    angles = load_json(args.angles_path)
-    monitors = {k: TestMonitor(k,args.time_threshold,args.min_visibility_threshold) for k in angles.keys()}
 
-    asyncio.run(main())
+    main()
