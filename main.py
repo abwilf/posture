@@ -158,13 +158,20 @@ def main():
             time_string_bad = 'Bad Posture Time : ' + str(round(bad_time, 1)) + 's'
             cv2.putText(image, time_string_bad, (10, h - 20), font, 0.9, red, 2)
 
-        # If you stay in bad posture for more than 3 minutes (180s) send an alert.
+        # If you stay in bad posture for more than args.threshold seconds send an alert.
         if bad_time > args.threshold:
             sendWarning("out of alignment")
     except:
         cv2.putText(image, 'ERROR: Cannot identify keypoints!', (w - 150, 30), font, 0.9, green, 2)
+    
     # Display.
-    cv2.imshow('MediaPipe Pose', image)
+    # resize image
+    height, width = image.shape[:2]
+    # new_dimensions = (int(height*args.resize), int(width*args.resize))
+    new_dimensions =  (int(width*args.resize), int(height*args.resize))
+    resized_image = cv2.resize(image, new_dimensions)
+
+    cv2.imshow('Posture', resized_image)
     if cv2.waitKey(5) & 0xFF == ord('q'):
         break
   cap.release()
@@ -178,8 +185,11 @@ if __name__ == '__main__':
     parser.add_argument('--alignment_offset', type=int, default=30, help='Maximum distance between left and right shoulders to qualify for "alignment" – "can the camera see you ok"') #TODO: 100?
 
     # thresholds for good and bad posture
-    parser.add_argument('--neck_inclination', type=int, default=40, help='Maximum angle of neck inclination (degrees) before notification')
+    parser.add_argument('--neck_inclination', type=int, default=30, help='Maximum angle of neck inclination (degrees) before notification')
     parser.add_argument('--torso_inclination', type=int, default=10, help='Maximum angle of torso inclination (degrees) before notification')
+
+    # how big should the window be? width and height
+    parser.add_argument('--resize', type=float, default=.5, help='Size of the window to display the camera feed.  1.0 is full size, 0.5 is half size, etc.')
 
     args = parser.parse_args()
 

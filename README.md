@@ -30,7 +30,7 @@ Below is the output of`python3 main.py --help`
 usage: main.py [-h] [--threshold THRESHOLD] [--debug DEBUG]
                [--alignment_offset ALIGNMENT_OFFSET]
                [--neck_inclination NECK_INCLINATION]
-               [--torso_inclination TORSO_INCLINATION]
+               [--torso_inclination TORSO_INCLINATION] [--resize RESIZE]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -47,6 +47,8 @@ optional arguments:
   --torso_inclination TORSO_INCLINATION
                         Maximum angle of torso inclination (degrees) before
                         notification
+  --resize RESIZE       Size of the window to display the camera feed. 1.0 is
+                        full size, 0.5 is half size, etc.
 ```
 
 ## Future Work
