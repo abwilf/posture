@@ -46,7 +46,7 @@ def main():
   # open HD Web cam – not facetime cam
   pygame.camera.init()
   cams = pygame.camera.list_cameras()
-  cam_index = [i for i, s in enumerate(cams) if 'HD Web' in s][0] # TODO: modify based on what the cam idx names are; you don't want the facetime one
+  cam_index = [i for i, s in enumerate(cams) if 'USB Cam' in s][0] # TODO: modify based on what the cam idx names are; you don't want the facetime one
   cap = cv2.VideoCapture(cam_index)
 
   if args.debug:
